@@ -13,7 +13,17 @@
 
 int main()
 {
+    /* Disable buffering so logs appear instantly */
+    setbuf(stdout, NULL);
+
     int lfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (lfd < 0) {
+        perror("socket");
+        return 1;
+    }
+
+    int opt = 1;
+    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     struct sockaddr_in a;
     memset(&a, 0, sizeof(a));
@@ -22,16 +32,31 @@ int main()
     a.sin_port = htons(LISTEN_PORT);
     a.sin_addr.s_addr = INADDR_ANY;
 
-    bind(lfd, (struct sockaddr *)&a, sizeof(a));
-    listen(lfd, 5);
+    if (bind(lfd, (struct sockaddr *)&a, sizeof(a)) < 0) {
+        perror("bind");
+        return 1;
+    }
+
+    if (listen(lfd, 5) < 0) {
+        perror("listen");
+        return 1;
+    }
 
     printf("Tamper proxy listening on %d\n", LISTEN_PORT);
 
     int cfd = accept(lfd, NULL, NULL);
+    if (cfd < 0) {
+        perror("accept");
+        return 1;
+    }
 
     printf("Client connected.\n");
 
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        perror("socket");
+        return 1;
+    }
 
     struct sockaddr_in srv;
     memset(&srv, 0, sizeof(srv));
@@ -40,24 +65,42 @@ int main()
     srv.sin_port = htons(SERVER_PORT);
     inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
 
-    connect(sfd, (struct sockaddr *)&srv, sizeof(srv));
+    if (connect(sfd, (struct sockaddr *)&srv, sizeof(srv)) < 0) {
+        perror("connect");
+        return 1;
+    }
 
-    printf("Connected to real server.\n");
+    printf("Connected to real server on %d\n", SERVER_PORT);
 
     unsigned char buf[4096];
     int n;
+    int packet_count = 0;
     int tampered = 0;
 
     while ((n = read(cfd, buf, sizeof(buf))) > 0) {
 
-        if (!tampered && n > 40) {
-            buf[30] ^= 0xFF;
+        packet_count++;
+
+        printf("Forwarding packet %d (%d bytes)\n", packet_count, n);
+
+        /*
+         * IMPORTANT:
+         * First few packets are Kerberos/GSS handshake.
+         * Tamper later packets only (likely encrypted file data).
+         */
+        if (!tampered && packet_count >= 4 && n > 32) {
+            buf[20] ^= 0xFF;   /* flip one byte */
             tampered = 1;
-            printf("Ciphertext tampered!\n");
+            printf(">>> Ciphertext tampered on packet %d <<<\n", packet_count);
         }
 
-        write(sfd, buf, n);
+        if (write(sfd, buf, n) != n) {
+            perror("write");
+            break;
+        }
     }
+
+    printf("Connection closed.\n");
 
     close(cfd);
     close(sfd);
