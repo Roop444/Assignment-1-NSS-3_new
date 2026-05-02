@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,7 +64,7 @@ int main()
 
     srv.sin_family = AF_INET;
     srv.sin_port = htons(SERVER_PORT);
-    inet_pton(AF_INET, "127.0.0.1", &srv.sin_addr);
+    inet_pton(AF_INET, "192.168.1.30", &srv.sin_addr);
 
     if (connect(sfd, (struct sockaddr *)&srv, sizeof(srv)) < 0) {
         perror("connect");
@@ -88,8 +89,8 @@ int main()
          * First few packets are Kerberos/GSS handshake.
          * Tamper later packets only (likely encrypted file data).
          */
-        if (!tampered && packet_count >= 4 && n > 32) {
-            buf[20] ^= 0xFF;   /* flip one byte */
+        if (!tampered && n > 100) {
+            buf[n - 30] ^= 0xFF;
             tampered = 1;
             printf(">>> Ciphertext tampered on packet %d <<<\n", packet_count);
         }
