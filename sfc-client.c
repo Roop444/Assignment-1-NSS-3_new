@@ -1,3 +1,4 @@
+
 /* =========================
    sfc-client.c
    Phase 3 Secure Key Exchange
@@ -28,7 +29,7 @@ int main(int argc, char **argv)
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(PORT);
-    inet_pton(AF_INET, "192.168.1.30", &addr.sin_addr); /* change IP */
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr); /* change IP */
 
     connect(fd, (struct sockaddr *)&addr, sizeof(addr));
 
